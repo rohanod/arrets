@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v3
       - name: Remove lines with ;N at end
         run: |
-          grep -rlE '.*;N\s*$' . | while read file; do
+          grep -rlE '.*;N\s*$' . --exclude-dir=".github" | while read file; do
             sed -i.bak -E '/.*;N\s*$/d' "$file" && rm "$file.bak"
           done
       - name: Commit changes
@@ -26,3 +26,4 @@ jobs:
         uses: ad-m/github-push-action@v0.6.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
