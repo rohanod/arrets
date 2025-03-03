@@ -1,0 +1,30 @@
+name: Update arrets.csv and remove lines ending with ;N
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+permissions:
+  contents: write
+  workflows: write
+jobs:
+  update-arrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Fetch new arrets.csv
+        run: |
+          curl -L 'https://opendata.tpg.ch/api/explore/v2.1/catalog/datasets/arrets/exports/csv?lang=en&timezone=Europe%2FBerlin&use_labels=true&delimiter=%3B' -o arrets.csv
+      - name: Remove lines with ;N at end from arrets.csv
+        run: |
+          sed -i.bak -E '/^.*;N\s*$/d' arrets.csv && rm arrets.csv.bak
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add arrets.csv
+          git commit -m "Update arrets.csv and remove lines ending with ;N" || echo "No changes to commit"
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
