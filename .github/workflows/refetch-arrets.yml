@@ -4,7 +4,6 @@ on:
     - cron: '0 23 * * 6'
 permissions:
   contents: write
-  workflows: write
 jobs:
   update-arrets:
     runs-on: ubuntu-latest
