@@ -1,4 +1,4 @@
-name: Update arrets.csv and remove lines ending with ;N
+name: Update arrets.csv and remove duplicates and lines ending with ;N
 on:
   schedule:
     - cron: '0 23 * * 6'
@@ -14,18 +14,23 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Fetch new arrets.csv
         run: |
           curl -L 'https://opendata.tpg.ch/api/explore/v2.1/catalog/datasets/arrets/exports/csv?lang=en&timezone=Europe%2FBerlin&use_labels=true&delimiter=%3B' -o arrets.csv
-      - name: Remove lines with ;N at end from arrets.csv
+
+      - name: Remove lines with ;N at end and deduplicate by stop name
         run: |
-          sed -i.bak -E '/^.*;N\s*$/d' arrets.csv && rm arrets.csv.bak
+          awk -F';' '!seen[$1]++ && $0 !~ /;N\s*$/' arrets.csv > arrets_tmp.csv
+          mv arrets_tmp.csv arrets.csv
+
       - name: Commit changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add arrets.csv
-          git commit -m "Update arrets.csv and remove lines ending with ;N" || echo "No changes to commit"
+          git commit -m "Update arrets.csv, remove duplicates, and filter lines ending with ;N" || echo "No changes to commit"
+
       - name: Push changes
         uses: ad-m/github-push-action@v0.6.0
         with:
