@@ -19,17 +19,55 @@ jobs:
         run: |
           curl -L 'https://opendata.tpg.ch/api/explore/v2.1/catalog/datasets/arrets/exports/csv?lang=en&timezone=Europe%2FBerlin&use_labels=true&delimiter=%3B' -o arrets.csv
 
-      - name: Remove lines with ;N at end and deduplicate by stop name
+      - name: Filter out ;N lines and deduplicate by Stop+Municipality+Didoc Code within 2km
         run: |
-          awk -F';' '!seen[$1]++ && $0 !~ /;N\s*$/' arrets.csv > arrets_tmp.csv
-          mv arrets_tmp.csv arrets.csv
+          python3 <<EOF
+          import csv
+          import math
+
+          def haversine(coord1, coord2):
+              R = 6371
+              lat1, lon1 = map(float, coord1)
+              lat2, lon2 = map(float, coord2)
+              phi1, phi2 = math.radians(lat1), math.radians(lat2)
+              dphi = math.radians(lat2 - lat1)
+              dlambda = math.radians(lon2 - lon1)
+              a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+              return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+          with open('arrets.csv', newline='', encoding='utf-8') as infile:
+              reader = csv.DictReader(infile, delimiter=';')
+              rows = [row for row in reader if not row['Actif'].strip().endswith('N')]
+
+          unique = []
+          seen = []
+
+          for row in rows:
+              key = (row['Stop'], row['Municipality'], row['Didoc Code'])
+              coord = tuple(map(float, row['Coordonnées'].split(',')))
+
+              duplicate_found = False
+              for seen_key, seen_coord in seen:
+                  if key == seen_key:
+                      if haversine(coord, seen_coord) <= 2:
+                          duplicate_found = True
+                          break
+              if not duplicate_found:
+                  unique.append(row)
+                  seen.append((key, coord))
+
+          with open('arrets.csv', 'w', newline='', encoding='utf-8') as outfile:
+              writer = csv.DictWriter(outfile, fieldnames=unique[0].keys(), delimiter=';')
+              writer.writeheader()
+              writer.writerows(unique)
+          EOF
 
       - name: Commit changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add arrets.csv
-          git commit -m "Update arrets.csv, remove duplicates, and filter lines ending with ;N" || echo "No changes to commit"
+          git commit -m "Update arrets.csv, remove duplicates within 2km and filter ;N lines" || echo "No changes to commit"
 
       - name: Push changes
         uses: ad-m/github-push-action@v0.6.0
